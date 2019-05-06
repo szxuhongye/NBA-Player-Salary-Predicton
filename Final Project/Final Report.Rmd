@@ -85,7 +85,7 @@ player_season_tidy <- player_season_v3 %>% group_by(Player)%>%
    mutate(rank = min_rank(desc(G))) %>%
    filter(rank == 1) %>%
    select(-rank)
-# No regularized data(for data visulization)
+# No Scale data(for data visulization)
 player_season_tidy <- player_season_tidy %>% filter(!is.na(`3P%`) & !is.na(`FT%`)& !is.na(`2P%`)) %>% as.data.frame(.)
 head(player_season_tidy)
 ```
@@ -285,18 +285,17 @@ Pope
 
 ## 6.2 Analysis conclusion
 ```{r}
-salary_prediction <- function(m, point, minutes, turn_over){
-  pre_new <- predict(m, data.frame(PTS = point, MP = minutes, TOV= turn_over))
-  msg <- paste("PPG:", point, ",MPG:", minutes, ",TOPG:", turn_over, " ==> Expected Salary: $", format(round(pre_new), big.mark = ","), sep = "")
+salary_prediction <- function(m, point, minutes, turn_over, assists, steals, rebounds){
+  pre_new <- predict(m, data.frame(PTS = point, MP = minutes, TOV= turn_over, AST= assists, STL= steals, TRB= rebounds))
+  msg <- paste( "Expected Salary: $", format(round(pre_new), big.mark = ","), sep = "")
   print(msg)
 }
-model <- lm(salary18_19~ PTS + MP + TOV, data =regression)
-salary_prediction(model,Pope$PTS,Pope$MP,Pope$TOV)
-salary_prediction(model,Bullock$PTS,Bullock$MP,Bullock$TOV)
-salary_prediction(model,Stephenson$PTS,Stephenson$MP,Stephenson$TOV)
+model <- lm(salary18_19~ PTS + MP + TOV + AST + STL + TRB, data =regression)
+salary_prediction(model,Pope$PTS,Pope$MP,Pope$TOV,Pope$AST,Pope$STL,Pope$TRB)
+salary_prediction(model,Bullock$PTS,Bullock$MP,Bullock$TOV,Bullock$AST,Bullock$STL,Bullock$TRB)
+salary_prediction(model,Stephenson$PTS,Stephenson$MP,Stephenson$TOV,Stephenson$AST,Stephenson$STL,Stephenson$TRB)
 ```
-So Salaries for Pope, Bullock and Stephenson for next season are $8,419,616, $9,375,148 and $5,703,847, respectively.
-
+So Salaries for Pope, Bullock and Stephenson for next season are $7,785,809, $7,126,513 and $5,286,590
 
 
 
