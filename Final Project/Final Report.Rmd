@@ -1,9 +1,10 @@
 ---
-title: "Final Report"
+title: "Prediction of NBA Player's Salary Based on Stepwise Regression Model"
 author: "Hongye Xu"
-date: "2019/5/5"
 output:
-  pdf_document: 
+  html_document:
+    df_print: paged
+  pdf_document:
     keep_tex: yes
     latex_engine: xelatex
 ---
@@ -62,11 +63,14 @@ library(PerformanceAnalytics)
 library(plotly)
 library(caret)
 library(MASS)
+library(knitr)
 ```
 
 ##2.2 Data Scraping and Cleaning 
 ###2.2.1 Players' Regular Season Data
-```{r}
+My first data source came from https://www.basketball-reference.com/leagues/NBA_2019_per_game.html. Because all the data in the website is displayed in the form of HTML table, I can read the data in this table by reading the XPath('//*[@id="per_game_stats"]') of the table with Chrome browser.
+At the same time, because many NBA players transfer during the season, this data source records their data in many teams, and we just need to keep the data that represents their season average.In addition, I deleted those rows which do not contain 3 points field goals, 2 points field goals and free throw field goals.
+```{r echo=FALSE}
 #NBA Season18-19 Players stat(Regular Season)
 url<- "https://www.basketball-reference.com/leagues/NBA_2019_per_game.html"
 player_season_v1 <- url %>% read_html()%>%
@@ -74,8 +78,7 @@ player_season_v1 <- url %>% read_html()%>%
   html_table()
 ```
 
-
-```{r}
+```{r,echo=FALSE}
 # romove the rank column and row number
 player_season_v2 <- player_season_v1[[1]]%>%dplyr::select(-Rk)
 player_season_v3 <-player_season_v2[- grep("Player", player_season_v2$Player),]
@@ -94,13 +97,9 @@ player_season_tidy <- player_season_tidy %>% filter(!is.na(`3P%`) & !is.na(`FT%`
 head(player_season_tidy)
 ```
 
-
-
-
-
 ### 2.2.2 Scale
-Considering that regression analysis is mainly used in this report, i try to scale some features.
-```{r}
+Considering that regression analysis is mainly used in this report. In order to eliminate the inaccuracy of parameters caused by too large or too small data itself. I create a standardized version of the data.
+```{r,echo=FALSE}
 #Here i use the Player column as the rowname since the scale function need the whole matrix features to be numeric
 scale <- player_season_tidy %>% dplyr::select(Player ,Age,MP,`2P%`,`3P%`,`FT%`,TRB:PTS)
 rownames(scale)<-scale[,1]
@@ -111,8 +110,8 @@ head(scale1)
 ```
 
 ###2.2.3 Players' Salaries
-
-```{r}
+The second data came from https://www.basketball-reference.com/contracts/players.html, and I imported it in the same way as I scrapped the first data. This data includes salary data for the next six seasons. But all we need is this season's data, so I filtered it and converted character data into numeric data. The result is as follow.
+```{r,echo=FALSE}
 # Players' salaries from season 18-19
 url1 <- "https://www.basketball-reference.com/contracts/players.html"
 salaries <- url1 %>% read_html()%>%
@@ -124,12 +123,9 @@ names(salaries_v2) <- as.character(unlist(salaries_v2[1,]))
 salaries_v2 <- salaries_v2[-1,] %>%
   dplyr::select(-Rk)
 rownames(salaries_v2) <- NULL
-head(salaries_v2)
 ```
 
-
-
-```{r}
+```{r,echo=FALSE}
 # Change 2018-19 salaries to be numeric data
 salaries_v2$`2018-19` <- salaries_v2$`2018-19` %>%
   str_replace_all(.,"\\,","")%>%
@@ -143,10 +139,9 @@ salaries_v4 <- salaries_v3 %>% group_by(Player) %>%
   mutate(rank = min_rank(desc(`2018-19`))) %>%
    filter(rank == 1) %>%
    dplyr::select(-rank)
-head(salaries_v4)
 ```
 
-```{r}
+```{r,echo=FALSE}
 salaries_tidy <- salaries_v4 %>% 
   dplyr::select(Player,Tm,`2018-19`)%>%
   as.data.frame(.)
@@ -161,16 +156,16 @@ Finally, there is no duplicate player data.
 
 
 ###2.2.4 Merging Data
-```{r}
+Merge standardized and non-standardized data with player salary data to get the final data we need.
+```{r,echo=FALSE}
 #non_scale data
 stats_for_visualized <- merge(player_season_tidy, salaries_tidy, by.x = "Player", by.y = "Player")
 names(stats_for_visualized)[31] <- "salary18_19"
 stats_for_visualization <- stats_for_visualized[-30]
 head(stats_for_visualization)
-
 ```
 
-```{r}
+```{r,echo=FALSE}
 #scale data
 salaries1 <- salaries_tidy 
 rownames(salaries1) <- salaries1[,1]
@@ -181,25 +176,24 @@ stats_scale <- stats_scale[-14]
 head(stats_scale)
 ```
 ###2.2.5 Save No_scale Data Into CSV\
-```{r}
+```{r,echo=FALSE}
 write.csv(stats_for_visualization,'18-19players_stat.csv')
 ```
-
+I saved the merged non-standardized data to the working directory with the file name'18-19 players_stat.csv'.
 # 3 Correlation Check
 ## 3.1 Frist Check
-```{r}
+```{r,echo=FALSE}
 corrplot(cor(stats_scale %>% 
                dplyr::select(salary18_19, Age:PTS, contains("%")), 
              use = "complete.obs"), 
          method = "circle",type = "upper")
 ```
 
-
 The features that have strong correlation with salary are:PTS,TOV,STL,AST,TRB and MP.
 Besides, MP is strongly correlated with multiple features and may have multiple collinearities(This is in line with our common sense. The more time we play, the better the data will be). What I didn't expect was that the correlation between field goal and salary was not high, that is to say, the output of players influenced the salary of players more than efficiency.
 
 ## 3.2 Second Check
-```{r,warning=FALSE,message=FALSE}
+```{r,warning=FALSE,message=FALSE,echo=FALSE}
 stats_salary_cor <- 
   stats_scale %>% 
   dplyr::select(salary18_19,PTS, MP, TOV, AST, STL, TRB)
@@ -213,9 +207,9 @@ There's also one thing that surprises me: the number of players'turnivers is pos
 
 #4 Data Visualization
 ##4.1 Interactive Plot
-```{r}
-names(stats_for_visualization )[4] <- "Team"
-plot_ly(data = stats_for_visualization , x = ~salary18_19, y = ~PTS, color = ~Team,
+```{r,echo=FALSE,warning=FALSE,message=FALSE}
+names(stats_for_visualization)[4] <- "Team"
+plot_ly( format = "pdf",data = stats_for_visualization , x = ~salary18_19, y = ~PTS, color = ~Team,
         hoverinfo = "text",
         text = ~paste("Player: ", Player,
                       "<br>Salary: ", format(salary18_19, big.mark = ","),"$",
@@ -229,7 +223,7 @@ plot_ly(data = stats_for_visualization , x = ~salary18_19, y = ~PTS, color = ~Te
 ```
 
 ##4.2 Scatter Plot With Regression Line
-```{r}
+```{r,echo=FALSE}
 stats_for_visualization %>% 
   ggplot(aes(x = salary18_19, y = PTS)) + 
   geom_point() + 
@@ -237,10 +231,10 @@ stats_for_visualization %>%
 ```
 
 Under the simple linear model, we can understand that the fitted curve represents the average level of the league, and the player below the curve performs worse than the expected performance corresponding to the salary. We can check their name 
-by hovering on the points in the interactive plot. It includes a lot of All-Star players, such as Chris Paul, Kyle Lowry, Al Horford, Gordon Haywood(The Celtics are unlucky) and etc. However, it only considers the scoring feature, and does not fully reflect the players'influence on the field.
+by hovering on the points in the interactive plot(only in HTML form file). It includes a lot of All-Star players, such as Chris Paul, Kyle Lowry, Al Horford, Gordon Haywood(The Celtics are unlucky) and etc. However, it only considers the scoring feature, and does not fully reflect the players'influence on the field.
 
 #5 Multiple Regression
-```{r}
+```{r,echo=FALSE}
 regression <- stats_scale %>% dplyr::select(salary18_19,PTS, MP, TOV, AST, STL, TRB)
   lm(salary18_19~ PTS + MP + TOV + AST + STL + TRB, data =regression)
 ```
@@ -249,40 +243,42 @@ From here, we can see that points per game is the most significant feature of po
 ## 5.1 Player 's Importance And Incautiousness
 Here we make two definitions that a player is "important" if his minutes played is above average and is "incautious" if his turnover per game is above average.
 
-```{r}
+```{r,echo=FALSE}
 avg.minutes <- mean(regression$MP)
 avg.turnover <- mean(regression$TOV)
 regression$Importance<- as.factor(ifelse(regression$MP >= avg.minutes, "Yes", "No"))
 regression$Incautiousness <- as.factor(ifelse(regression$TOV >= avg.turnover, "Yes", "No"))
-head(regression)
 ```
 
 ##5.2 Prallel Slope Model
 ###5.2.1 Incautiousness Comparision
-```{r}
+```{r,echo=FALSE}
 regression %>% 
   ggplot(aes(x = salary18_19, y = (TOV * var(player_season_tidy$TOV)^(1/2) + mean(player_season_tidy$TOV)), colour = Incautiousness)) + 
   geom_point() + 
   geom_smooth(method="lm")+
   ylab("turnovers per game")
 ```
-
-It's true that players with higher salaries make more turnovers. But the tendency is weak.So in fact, turnovers don't have much impact on salaries.
-
-```{r}
+The plot shows that the number of turnovers of the players with higher salaries will increase correspondingly, but the magnitude is not large. We can think that it is a natural phenomenon caused by the increase of playing time. 
+Then I do a regression analysis of Importance and Incautiousness. The result is as follow
+```{r,echo=FALSE}
 lm(formula = salary18_19 ~ Importance * Incautiousness, data=regression)
 ```
 
-This shows that when a player is important, he is paid more with fewer turnovers. But the impact is limited.
+We can assume that the impact of A and B is close to synchronization, which confirms my previous view that players with higher salaries have more playing time, which leads to more turnovers, rather than higher salaries because of higher turnovers.
 
 ## 5.3 Stepwise Regression
-```{r}
+Considering that the data of NBA players will increase with the increase of playing time, there must be multiple collinearity among the features. So stepwise regression is the more accurate method.
+```{r,echo=FALSE}
 # Do Stepwise Regression
-stepdata <- stats_scale %>%  dplyr::select(Age:salary18_19)
-full.model <- lm(salary18_19~., data =stepdata)
+full.model <- lm(salary18_19~., data =regression)
 step.model <- stepAIC(full.model, direction = "both", 
                       trace = FALSE)
 summary(step.model)
+```
+
+Here I use k-fold cross-validation to test the error of the models that have different number of variate.
+```{r,echo=FALSE}
 # Set seed for reproducibility
 set.seed(123)
 # Set up repeated k-fold cross-validation
@@ -295,10 +291,9 @@ step.model <- train(salary18_19 ~., data = regression,
                     )
 step.model$results
 ```
+From the result we can see that three-variable model's RMSE is the smallest and Rsquared is second largest. So the three-variable model is the best one. Let us find out the order in which variables are added to the model.
 
-From the result we can see that three-variable model's RMSE is the smallest.
-
-```{r}
+```{r,echo=FALSE}
 summary(step.model$finalModel)
 coef(step.model$finalModel, 3)
 ```
@@ -308,17 +303,16 @@ The best model is salary18_19 ~ PTS + AST + TRB
 # 6 Conclusion
 ## 6.1 What i want to predict
 As Lebron James  fan, I am concerned about the new contract for the Lakers who may stay next season. Let's find them first.
-```{r}
+```{r,echo=FALSE}
 salaries_v4 %>% filter(Tm == "LAL" & `2019-20` == "")%>%
   dplyr::select(Player)
 Pope <- stats_scale %>% filter(Row.names == "Kentavious Caldwell-Pope")
 Bullock <- stats_scale %>% filter(Row.names == "Reggie Bullock")
 Stephenson <- stats_scale %>% filter(Row.names == "Lance Stephenson")
-Pope
 ```
 
 ## 6.2 Analysis conclusion
-```{r}
+```{r,echo=FALSE}
 salary_prediction <- function(m, point,assists,rebounds){
   pre_new <- predict(m, data.frame(PTS = point, AST= assists, TRB= rebounds))
   msg <- paste( "Expected Salary: $", format(round(pre_new), big.mark = ","), sep = "")
@@ -329,7 +323,7 @@ salary_prediction(model,Pope$PTS,Pope$AST,Pope$TRB)
 salary_prediction(model,Bullock$PTS,Bullock$AST,Bullock$TRB)
 salary_prediction(model,Stephenson$PTS,Stephenson$AST,Stephenson$TRB)
 ```
-So Salaries for Pope, Bullock and Stephenson for next season are $6,771,542, $7,275,901 and $5,902,181
+Here I choose three players who are more likely to stay next season to make predictions.The result shows that salaries for Pope, Bullock and Stephenson for next season are $6,771,542, $7,275,901 and $5,902,181
 
 
 
