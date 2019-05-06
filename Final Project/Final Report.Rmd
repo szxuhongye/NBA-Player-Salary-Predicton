@@ -3,8 +3,10 @@ title: "Final Report"
 author: "Hongye Xu"
 date: "2019/5/5"
 output:
-  html_document: default
-  pdf_document: default
+  pdf_document: 
+    keep_tex: yes
+    latex_engine: xelatex
+---
 ---
 #1 Introduction
 ## 1.1 Background
