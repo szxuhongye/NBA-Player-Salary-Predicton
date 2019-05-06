@@ -1,0 +1,306 @@
+---
+title: "Final Report"
+author: "Hongye Xu"
+date: "2019/5/5"
+output:
+  html_document: default
+  pdf_document: default
+---
+#1 Introduction
+## 1.1 Background
+I have always felt that the NBA has the best data storage in the sport filed. In the beginning, I wanted to analyze the performance of the players by scrapping the data from the official NBA.stat website. However, since the NBA.stat table is in javascript format, and the official has canceled all the existing official APIs, no possible R-based crawler method has been found after the effort. Therefore, I chose an alternative, which is the basketball-reference website. This report is based on two data sources on the basketball-reference. My goal is to predict the player's salary for next season based on player performance this season.
+
+## 1.2 Glossary
+Table Header | Second Header
+------------- | -------------
+Pos | Position
+Age | Age of Player at the start of February 1st of that season 
+Tm | Team 
+G | Games
+GS | Games Started 
+MP | Minutes Played Per Game 
+FG | Field Goals Per Game
+FGA | Field Goal Attempts Per Game
+FG% | Field Goal Percentage 
+3P | 3-Point Field Goals Per Game
+3PA | 3-Point Field Goal Attempts Per Game
+3P% | FG% on 3-Pt FGAs.
+2P | 2-Point Field Goals Per Game 
+2PA | 2-Point Field Goal Attempts Per Game 
+eFG% | Effective Field Goal Percentage
+FT | Free Throws Per Game
+FTA | Free Throw Attempts Per Game 
+FT% | Free Throw Percentage 
+ORB | Offensive Rebounds Per Game 
+DRB | Defensive Rebounds Per Game
+TRB | Total Rebounds Per Game 
+AST | Assists Per Game 
+STL | Steals Per Game 
+BLK | Blocks Per Game 
+TOV | Turnovers Per Game 
+PF | Personal Fouls Per Game 
+PTS | Points Per Game 
+
+## Github Link
+https://github.com/szxuhongye/NBA-Player-Salary-Predicton.git
+
+#2 Preparation
+##2.1 Required Packages
+```{r,warning=FALSE,message=FALSE}
+library(rvest)
+library(magrittr)
+library(tibble)
+library(dplyr)
+library(stringr)
+library(data.table)
+library(corrplot)
+library(GGally)
+library(tidyverse)
+library(PerformanceAnalytics)
+library(plotly)
+```
+
+##2.2 Data Scraping and Cleaning 
+###2.2.1 Players' Regular Season Data
+```{r}
+#NBA Season18-19 Players stat(Regular Season)
+url<- "https://www.basketball-reference.com/leagues/NBA_2019_per_game.html"
+player_season_v1 <- url %>% read_html()%>%
+  html_nodes(xpath = '//*[@id="per_game_stats"]')%>%
+  html_table()
+```
+
+
+```{r}
+# romove the rank column and row number
+player_season_v2 <- player_season_v1[[1]]%>%select(-Rk)
+player_season_v3 <-player_season_v2[- grep("Player", player_season_v2$Player),]
+# make some columns numeric
+name <- c("Age","G","GS","MP","FG","FGA","FG%","3P","3PA","3P%","2P","2PA","2P%","eFG%","FT","FTA","FT%","ORB","DRB","TRB","AST","STL","BLK","TOV","PF","PTS")
+player_season_v3[name] <- sapply(player_season_v3[name],as.numeric)
+rownames(player_season_v3) <- NULL
+
+# There will be multiple rows of data for players transferred during the season. We only keep the one with the largest number of games played(which is the stat of this player throughout the season).
+player_season_tidy <- player_season_v3 %>% group_by(Player)%>%
+   mutate(rank = min_rank(desc(G))) %>%
+   filter(rank == 1) %>%
+   select(-rank)
+# No regularized data(for data visulization)
+player_season_tidy <- player_season_tidy %>% filter(!is.na(`3P%`) & !is.na(`FT%`)& !is.na(`2P%`)) %>% as.data.frame(.)
+head(player_season_tidy)
+```
+
+
+
+
+
+### 2.2.2 Scale
+Considering that regression analysis is mainly used in this report, i try to scale some features.
+```{r}
+#Here i use the Player column as the rowname since the scale function need the whole matrix features to be numeric
+scale <- player_season_tidy %>% select(Player ,Age,MP,`2P%`,`3P%`,`FT%`,TRB:PTS)
+rownames(scale)<-scale[,1]
+scale1 <- scale[,-1]%>% as.matrix(.)%>%
+  scale(.) %>%
+  as.data.frame(.)
+head(scale1)
+```
+
+###2.2.3 Players' Salaries
+
+```{r}
+# Players' salaries from season 18-19
+url1 <- "https://www.basketball-reference.com/contracts/players.html"
+salaries <- url1 %>% read_html()%>%
+  html_nodes(xpath = '//*[@id="player-contracts"]')%>%
+  html_table()
+salaries_v2 <- salaries[[1]]
+colnames(salaries_v2) <- NULL
+names(salaries_v2) <- as.character(unlist(salaries_v2[1,]))
+salaries_v2 <- salaries_v2[-1,] %>%
+  select(-Rk)
+rownames(salaries_v2) <- NULL
+head(salaries_v2)
+```
+
+
+
+```{r}
+# Change 2018-19 salaries to be numeric data
+salaries_v2$`2018-19` <- salaries_v2$`2018-19` %>%
+  str_replace_all(.,"\\,","")%>%
+  str_replace_all(., "\\$","")%>%
+  as.numeric(.)
+# Delete rows containing missing values (due to duplicate headers)
+salaries_v2 <-salaries_v2[- grep("Player", player_season_v2$Player),]
+salaries_v3 <-na.omit(salaries_v2)
+#remove duplicated row(only keep the highest one)
+salaries_v4 <- salaries_v3 %>% group_by(Player) %>%
+  mutate(rank = min_rank(desc(`2018-19`))) %>%
+   filter(rank == 1) %>%
+   select(-rank)
+head(salaries_v4)
+```
+
+```{r}
+salaries_tidy <- salaries_v4 %>% 
+  select(Player,Tm,`2018-19`)%>%
+  as.data.frame(.)
+# Following two players' salaries are not changed after transfer(So i delete them to avoid duplication of one player after doing table merging)
+salaries_tidy <- salaries_tidy[!(salaries_tidy$Player=="John Jenkins" & salaries_tidy$Tm=="NYK"),]
+salaries_tidy <- salaries_tidy[!(salaries_tidy$Player=="Emanuel Terry" & salaries_tidy$Tm=="MIA"),]
+salaries_tidy %>% mutate(duplicated(Player))%>% 
+  filter(`duplicated(Player)`== TRUE)
+head(salaries_tidy) 
+```
+Finally, there is no duplicate player data.
+
+
+###2.2.4 Merging Data
+```{r}
+#non_scale data
+stats_for_visualized <- merge(player_season_tidy, salaries_tidy, by.x = "Player", by.y = "Player")
+names(stats_for_visualized)[31] <- "salary18_19"
+stats_for_visualization <- stats_for_visualized[-30]
+head(stats_for_visualization)
+
+```
+
+```{r}
+#scale data
+salaries1 <- salaries_tidy 
+rownames(salaries1) <- salaries1[,1]
+salaries2 <- salaries1[,-1]
+stats_scale <- merge(scale1, salaries2, by="row.names")
+names(stats_scale)[15] <- "salary18_19"
+stats_scale <- stats_scale[-14]
+head(stats_scale)
+```
+###2.2.5 Save No_scale Data Into CSV\
+```{r}
+write.csv(stats_for_visualization,'18-19players_stat.csv')
+```
+
+# 3 Correlation Check
+## 3.1 Frist Check
+```{r}
+corrplot(cor(stats_scale %>% 
+               select(salary18_19, Age:PTS, contains("%")), 
+             use = "complete.obs"), 
+         method = "circle",type = "upper")
+```
+
+
+The features that have strong correlation with salary are:PTS,TOV,STL,AST,TRB and MP.
+Besides, MP is strongly correlated with multiple features and may have multiple collinearities(This is in line with our common sense. The more time we play, the better the data will be). What I didn't expect was that the correlation between field goal and salary was not high, that is to say, the output of players influenced the salary of players more than efficiency.
+
+## 3.2 Second Check
+```{r,warning=FALSE,message=FALSE}
+stats_salary_cor <- 
+  stats_scale %>% 
+  select(salary18_19,PTS, MP, TOV, AST, STL, TRB)
+ggpairs(stats_salary_cor)
+cor(stats_salary_cor)[,"salary18_19"]
+```
+
+
+Correlation strength is: PTS > MP > TOV > AST > STL > TRB
+There's also one thing that surprises me: the number of players'turnivers is positively correlated with their salaries. I mean, generally speaking, assuming that a player's turnover rate is constant, the total number of turnovers will increase as his minutes played increases, and important players will have higher minutes played and higher salaries.
+
+#4 Data Visualization
+##4.1 Interactive Plot
+```{r}
+names(stats_for_visualization )[4] <- "Team"
+plot_ly(data = stats_for_visualization , x = ~salary18_19, y = ~PTS, color = ~Team,
+        hoverinfo = "text",
+        text = ~paste("Player: ", Player,
+                      "<br>Salary: ", format(salary18_19, big.mark = ","),"$",
+                      "<br>PTS: ", round(PTS, digits = 3),
+                      "<br>Team: ", Team)) %>% 
+  layout(
+    title = "Salary vs Points Per Game",
+    xaxis = list(title = "Salary USD"),
+    yaxis = list(title = "Points per Game")
+  )
+```
+
+##4.2 Scatter Plot With Regression Line
+```{r}
+stats_for_visualization %>% 
+  ggplot(aes(x = salary18_19, y = PTS)) + 
+  geom_point() + 
+  geom_smooth(method = "lm") 
+```
+
+Under the simple linear model, we can understand that the fitted curve represents the average level of the league, and the player below the curve performs worse than the expected performance corresponding to the salary. We can check their name 
+by hovering on the points in the interactive plot. It includes a lot of All-Star players, such as Chris Paul, Kyle Lowry, Al Horford, Gordon Haywood(The Celtics are unlucky) and etc. However, it only considers the scoring feature, and does not fully reflect the players'influence on the field.
+
+#5 Multiple Regression
+```{r}
+regression <- stats_scale %>% select(salary18_19,PTS, MP, TOV, AST, STL, TRB)
+  lm(salary18_19~ PTS + MP + TOV + AST + STL + TRB, data =regression)
+```
+From here, we can see that points per game is the most significant feature of positive impact, while turnovers per game is the most significant feature of negative impact.
+
+## 5.1 Player 's Importance And Incautiousness
+Here we make two definitions that a player is "important" if his minutes played is above average and is "incautious" if his turnover per game is above average.
+
+```{r}
+avg.minutes <- mean(regression$MP)
+avg.turnover <- mean(regression$TOV)
+regression$Importance<- as.factor(ifelse(regression$MP >= avg.minutes, "Yes", "No"))
+regression$Incautiousness <- as.factor(ifelse(regression$TOV >= avg.turnover, "Yes", "No"))
+head(regression)
+```
+
+##5.2 Prallel Slope Model
+###5.2.1 Incautiousness Comparision
+```{r}
+regression %>% 
+  ggplot(aes(x = salary18_19, y = (TOV * var(player_season_tidy$TOV)^(1/2) + mean(player_season_tidy$TOV)), colour = Incautiousness)) + 
+  geom_point() + 
+  geom_smooth(method="lm")+
+  ylab("turnovers per game")
+```
+
+It's true that players with higher salaries make more turnovers. But the tendency is weak.
+
+```{r}
+lm(formula = salary18_19 ~ Importance * Incautiousness, data=regression)
+```
+
+This shows that when a player is important, he is paid more with fewer turnovers.
+
+# 6 Conclusion
+## 6.1 What i want to predict
+As Lebron James  fan, I am concerned about the new contract for the Lakers who may stay next season. Let's find them first.
+```{r}
+salaries_v4 %>% filter(Tm == "LAL" & `2019-20` == "")%>%
+  select(Player)
+Pope <- stats_scale %>% filter(Row.names == "Kentavious Caldwell-Pope")
+Bullock <- stats_scale %>% filter(Row.names == "Reggie Bullock")
+Stephenson <- stats_scale %>% filter(Row.names == "Lance Stephenson")
+Pope
+```
+
+## 6.2 Analysis conclusion
+```{r}
+salary_prediction <- function(m, point, minutes, turn_over){
+  pre_new <- predict(m, data.frame(PTS = point, MP = minutes, TOV= turn_over))
+  msg <- paste("PPG:", point, ",MPG:", minutes, ",TOPG:", turn_over, " ==> Expected Salary: $", format(round(pre_new), big.mark = ","), sep = "")
+  print(msg)
+}
+model <- lm(salary18_19~ PTS + MP + TOV, data =regression)
+salary_prediction(model,Pope$PTS,Pope$MP,Pope$TOV)
+salary_prediction(model,Bullock$PTS,Bullock$MP,Bullock$TOV)
+salary_prediction(model,Stephenson$PTS,Stephenson$MP,Stephenson$TOV)
+```
+So Salaries for Pope, Bullock and Stephenson for next season are $8,419,616, $9,375,148 and $5,703,847, respectively.
+
+
+
+
+
+
+
+
