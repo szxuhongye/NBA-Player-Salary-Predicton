@@ -61,6 +61,7 @@ library(caret)
 library(MASS)
 library(knitr)
 library(png)
+library(ggplot2)
 ```
 
 ##2.1 Data Scraping and Cleaning 
@@ -202,14 +203,32 @@ Correlation strength is: PTS > MP > TOV > AST > STL > TRB
 There's also one thing that surprises me: the number of players'turnivers is positively correlated with their salaries. I mean, generally speaking, assuming that a player's turnover rate is constant, the total number of turnovers will increase as his minutes played increases, and important players will have higher minutes played and higher salaries.
 
 #4 Data Visualization
-##4.1 Interactive Plot
+##4.1 Distribution of Salaries
+```{r,echo=FALSE,warning=FALSE,message=FALSE}
+ggplot(stats_for_visualization, aes(x=salary18_19)) + 
+ geom_histogram(aes(y=..density..), colour="black", fill="white")+
+ geom_density(alpha=.2, fill="#FF6666")
+mean(stats_for_visualization$salary18_19)
+```
+
+With this distribution plot, we can see that most of the players' salaries are between 1 million and 10 million. Although the average salary is more than 7 million, it is because of the super-high salary level of the superstars.
+
+##4.2 Salaries By Teams
+```{r,echo=FALSE}
+ggplot(stats_for_visualization, aes(x=Tm.x, y=salary18_19)) +
+  geom_boxplot()+
+  coord_flip()
+```
+
+The average salary of the Houston Rockets and the Miami Heat is high.
+##4.3 Interactive Plot
 ```{r,echo=FALSE,warning=FALSE,message=FALSE}
 names(stats_for_visualization)[4] <- "Team"
 # for html output-------
 plot_ly( format = "pdf",data = stats_for_visualization , x = ~salary18_19, y = ~PTS, color = ~Team,
        hoverinfo = "text",
-       text = ~paste("Player: ", Player,
-                     "<br>Salary: ", format(salary18_19, big.mark = ","),"$",
+      text = ~paste("Player: ", Player,
+                   "<br>Salary: ", format(salary18_19, big.mark = ","),"$",
                     "<br>PTS: ", round(PTS, digits = 3),
                      "<br>Team: ", Team)) %>% 
  layout(
@@ -226,17 +245,17 @@ plot_ly( format = "pdf",data = stats_for_visualization , x = ~salary18_19, y = ~
 #                     "<br>Salary: ", format(salary18_19, big.mark = ","),"$",
 #                    "<br>PTS: ", round(PTS, digits = 3),
 #                     "<br>Team: ", Team)) %>% 
-# layout(
-#   title = "Salary vs Points Per Game",
-#   xaxis = list(title = "Salary USD"),
-#   yaxis = list(title = "Points per Game")
-# )
+ #layout(
+ #  title = "Salary vs Points Per Game",
+ #  xaxis = list(title = "Salary USD"),
+ #  yaxis = list(title = "Points per Game")
+ #)
 #tmpFile <- tempfile(fileext = ".png")
 #export(a, file = tmpFile)
 # for pdf output ------
 ```
 
-##4.2 Scatter Plot With Regression Line
+##4.4 Scatter Plot With Regression Line
 ```{r,echo=FALSE}
 stats_for_visualization %>% 
   ggplot(aes(x = salary18_19, y = PTS)) + 
