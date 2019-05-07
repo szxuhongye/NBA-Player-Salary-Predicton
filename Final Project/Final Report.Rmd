@@ -44,12 +44,8 @@ TOV | Turnovers Per Game
 PF | Personal Fouls Per Game 
 PTS | Points Per Game 
 
-## Github Link
-https://github.com/szxuhongye/NBA-Player-Salary-Predicton.git
-
 #2 Preparation
-##2.1 Required Packages
-```{r,warning=FALSE,message=FALSE}
+```{r,echo=FALSE,warning=FALSE,message=FALSE}
 library(rvest)
 library(magrittr)
 library(tibble)
@@ -66,8 +62,8 @@ library(MASS)
 library(knitr)
 ```
 
-##2.2 Data Scraping and Cleaning 
-###2.2.1 Players' Regular Season Data
+##2.1 Data Scraping and Cleaning 
+###2.1.1 Players' Regular Season Data
 My first data source came from https://www.basketball-reference.com/leagues/NBA_2019_per_game.html. Because all the data in the website is displayed in the form of HTML table, I can read the data in this table by reading the XPath('//*[@id="per_game_stats"]') of the table with Chrome browser.
 At the same time, because many NBA players transfer during the season, this data source records their data in many teams, and we just need to keep the data that represents their season average.In addition, I deleted those rows which do not contain 3 points field goals, 2 points field goals and free throw field goals.
 ```{r echo=FALSE}
@@ -78,7 +74,7 @@ player_season_v1 <- url %>% read_html()%>%
   html_table()
 ```
 
-```{r,echo=FALSE}
+```{r,echo=FALSE,warning=FALSE,message=FALSE}
 # romove the rank column and row number
 player_season_v2 <- player_season_v1[[1]]%>%dplyr::select(-Rk)
 player_season_v3 <-player_season_v2[- grep("Player", player_season_v2$Player),]
@@ -97,7 +93,7 @@ player_season_tidy <- player_season_tidy %>% filter(!is.na(`3P%`) & !is.na(`FT%`
 head(player_season_tidy)
 ```
 
-### 2.2.2 Scale
+### 2.1.2 Scale
 Considering that regression analysis is mainly used in this report. In order to eliminate the inaccuracy of parameters caused by too large or too small data itself. I create a standardized version of the data.
 ```{r,echo=FALSE}
 #Here i use the Player column as the rowname since the scale function need the whole matrix features to be numeric
@@ -109,7 +105,7 @@ scale1 <- scale[,-1]%>% as.matrix(.)%>%
 head(scale1)
 ```
 
-###2.2.3 Players' Salaries
+###2.1.3 Players' Salaries
 The second data came from https://www.basketball-reference.com/contracts/players.html, and I imported it in the same way as I scrapped the first data. This data includes salary data for the next six seasons. But all we need is this season's data, so I filtered it and converted character data into numeric data. The result is as follow.
 ```{r,echo=FALSE}
 # Players' salaries from season 18-19
@@ -125,7 +121,7 @@ salaries_v2 <- salaries_v2[-1,] %>%
 rownames(salaries_v2) <- NULL
 ```
 
-```{r,echo=FALSE}
+```{r,echo=FALSE,warning=FALSE,message=FALSE}
 # Change 2018-19 salaries to be numeric data
 salaries_v2$`2018-19` <- salaries_v2$`2018-19` %>%
   str_replace_all(.,"\\,","")%>%
@@ -141,7 +137,7 @@ salaries_v4 <- salaries_v3 %>% group_by(Player) %>%
    dplyr::select(-rank)
 ```
 
-```{r,echo=FALSE}
+```{r,echo=FALSE,warning=FALSE,message=FALSE}
 salaries_tidy <- salaries_v4 %>% 
   dplyr::select(Player,Tm,`2018-19`)%>%
   as.data.frame(.)
@@ -155,14 +151,13 @@ head(salaries_tidy)
 Finally, there is no duplicate player data.
 
 
-###2.2.4 Merging Data
+###2.1.4 Merging Data
 Merge standardized and non-standardized data with player salary data to get the final data we need.
 ```{r,echo=FALSE}
 #non_scale data
 stats_for_visualized <- merge(player_season_tidy, salaries_tidy, by.x = "Player", by.y = "Player")
 names(stats_for_visualized)[31] <- "salary18_19"
 stats_for_visualization <- stats_for_visualized[-30]
-head(stats_for_visualization)
 ```
 
 ```{r,echo=FALSE}
@@ -173,13 +168,13 @@ salaries2 <- salaries1[,-1]
 stats_scale <- merge(scale1, salaries2, by="row.names")
 names(stats_scale)[15] <- "salary18_19"
 stats_scale <- stats_scale[-14]
-head(stats_scale)
 ```
-###2.2.5 Save No_scale Data Into CSV\
+###2.1.5 Save No_scale Data Into CSV
 ```{r,echo=FALSE}
 write.csv(stats_for_visualization,'18-19players_stat.csv')
 ```
 I saved the merged non-standardized data to the working directory with the file name'18-19 players_stat.csv'.
+
 # 3 Correlation Check
 ## 3.1 Frist Check
 ```{r,echo=FALSE}
@@ -259,6 +254,7 @@ regression %>%
   geom_smooth(method="lm")+
   ylab("turnovers per game")
 ```
+
 The plot shows that the number of turnovers of the players with higher salaries will increase correspondingly, but the magnitude is not large. We can think that it is a natural phenomenon caused by the increase of playing time. 
 Then I do a regression analysis of Importance and Incautiousness. The result is as follow
 ```{r,echo=FALSE}
@@ -326,7 +322,8 @@ salary_prediction(model,Stephenson$PTS,Stephenson$AST,Stephenson$TRB)
 Here I choose three players who are more likely to stay next season to make predictions.The result shows that salaries for Pope, Bullock and Stephenson for next season are $6,771,542, $7,275,901 and $5,902,181
 
 
-
+#7 Github Link
+https://github.com/szxuhongye/NBA-Player-Salary-Predicton.git
 
 
 
