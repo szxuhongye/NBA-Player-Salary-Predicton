@@ -60,6 +60,7 @@ library(plotly)
 library(caret)
 library(MASS)
 library(knitr)
+library(png)
 ```
 
 ##2.1 Data Scraping and Cleaning 
@@ -204,17 +205,35 @@ There's also one thing that surprises me: the number of players'turnivers is pos
 ##4.1 Interactive Plot
 ```{r,echo=FALSE,warning=FALSE,message=FALSE}
 names(stats_for_visualization)[4] <- "Team"
+# for html output-------
 plot_ly( format = "pdf",data = stats_for_visualization , x = ~salary18_19, y = ~PTS, color = ~Team,
-        hoverinfo = "text",
-        text = ~paste("Player: ", Player,
-                      "<br>Salary: ", format(salary18_19, big.mark = ","),"$",
-                      "<br>PTS: ", round(PTS, digits = 3),
-                      "<br>Team: ", Team)) %>% 
-  layout(
-    title = "Salary vs Points Per Game",
-    xaxis = list(title = "Salary USD"),
-    yaxis = list(title = "Points per Game")
-  )
+       hoverinfo = "text",
+       text = ~paste("Player: ", Player,
+                     "<br>Salary: ", format(salary18_19, big.mark = ","),"$",
+                    "<br>PTS: ", round(PTS, digits = 3),
+                     "<br>Team: ", Team)) %>% 
+ layout(
+   title = "Salary vs Points Per Game",
+   xaxis = list(title = "Salary USD"),
+   yaxis = list(title = "Points per Game")
+ )
+# for html output-------
+
+# for pdf output ------
+#a <- plot_ly( format = "pdf",data = stats_for_visualization , x = ~salary18_19, y = ~PTS, color = ~Team,
+#       hoverinfo = "text",
+#       text = ~paste("Player: ", Player,
+#                     "<br>Salary: ", format(salary18_19, big.mark = ","),"$",
+#                    "<br>PTS: ", round(PTS, digits = 3),
+#                     "<br>Team: ", Team)) %>% 
+# layout(
+#   title = "Salary vs Points Per Game",
+#   xaxis = list(title = "Salary USD"),
+#   yaxis = list(title = "Points per Game")
+# )
+#tmpFile <- tempfile(fileext = ".png")
+#export(a, file = tmpFile)
+# for pdf output ------
 ```
 
 ##4.2 Scatter Plot With Regression Line
